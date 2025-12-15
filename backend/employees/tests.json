@@ -1,0 +1,32 @@
+{
+  "tests": [
+    {
+      "name": "Получение списка сотрудников",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Создание нового сотрудника",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "name": "Тестовый Сотрудник",
+        "department": "IT",
+        "status": "active",
+        "links": 50,
+        "reports": 10,
+        "warnings": 0,
+        "salary": 100000
+      },
+      "expectedStatus": 201,
+      "expectedBody": {
+        "employee": {
+          "name": "string",
+          "department": "string"
+        }
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

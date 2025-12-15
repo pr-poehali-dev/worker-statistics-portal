@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -34,25 +34,18 @@ type Employee = {
   salary: number;
 };
 
-const initialEmployees: Employee[] = [
-  { id: 1, name: 'Анна Смирнова', department: 'Продажи', status: 'active', links: 145, reports: 28, warnings: 0, salary: 85000 },
-  { id: 2, name: 'Дмитрий Иванов', department: 'Маркетинг', status: 'active', links: 203, reports: 32, warnings: 1, salary: 95000 },
-  { id: 3, name: 'Елена Петрова', department: 'Продажи', status: 'vacation', links: 167, reports: 25, warnings: 0, salary: 78000 },
-  { id: 4, name: 'Алексей Козлов', department: 'IT', status: 'active', links: 89, reports: 19, warnings: 2, salary: 120000 },
-  { id: 5, name: 'Мария Волкова', department: 'HR', status: 'active', links: 112, reports: 24, warnings: 0, salary: 72000 },
-  { id: 6, name: 'Сергей Морозов', department: 'Продажи', status: 'active', links: 198, reports: 30, warnings: 0, salary: 92000 },
-  { id: 7, name: 'Ольга Новикова', department: 'IT', status: 'inactive', links: 45, reports: 8, warnings: 3, salary: 115000 },
-  { id: 8, name: 'Иван Соколов', department: 'Маркетинг', status: 'active', links: 178, reports: 27, warnings: 1, salary: 88000 },
-];
+const API_URL = 'https://functions.poehali.dev/a2347a7d-29b5-403e-ad47-0db708e07f63';
 
 const Index = () => {
   const { toast } = useToast();
-  const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [salaryFilter, setSalaryFilter] = useState('all');
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [editForm, setEditForm] = useState<Employee>({
     id: 0,
@@ -64,6 +57,36 @@ const Index = () => {
     warnings: 0,
     salary: 0,
   });
+  const [addForm, setAddForm] = useState({
+    name: '',
+    department: 'Продажи',
+    status: 'active' as 'active' | 'vacation' | 'inactive',
+    links: 0,
+    reports: 0,
+    warnings: 0,
+    salary: 0,
+  });
+
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
+  const fetchEmployees = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(API_URL);
+      const data = await response.json();
+      setEmployees(data.employees);
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось загрузить сотрудников',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredEmployees = employees.filter((employee) => {
     const matchesSearch = employee.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -91,25 +114,86 @@ const Index = () => {
     setIsEditDialogOpen(true);
   };
 
-  const handleSaveEdit = () => {
-    setEmployees(employees.map(emp => 
-      emp.id === editForm.id ? editForm : emp
-    ));
-    setIsEditDialogOpen(false);
-    toast({
-      title: 'Сотрудник обновлен',
-      description: `Данные ${editForm.name} успешно сохранены`,
-    });
+  const handleSaveEdit = async () => {
+    try {
+      const response = await fetch(API_URL, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editForm),
+      });
+      
+      if (response.ok) {
+        await fetchEmployees();
+        setIsEditDialogOpen(false);
+        toast({
+          title: 'Сотрудник обновлен',
+          description: `Данные ${editForm.name} успешно сохранены`,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось сохранить изменения',
+        variant: 'destructive',
+      });
+    }
   };
 
-  const handleDeleteEmployee = (id: number) => {
+  const handleDeleteEmployee = async (id: number) => {
     const employee = employees.find(emp => emp.id === id);
-    setEmployees(employees.filter(emp => emp.id !== id));
-    toast({
-      title: 'Сотрудник удален',
-      description: `${employee?.name} удален из системы`,
-      variant: 'destructive',
-    });
+    try {
+      const response = await fetch(`${API_URL}?id=${id}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.ok) {
+        await fetchEmployees();
+        toast({
+          title: 'Сотрудник удален',
+          description: `${employee?.name} удален из системы`,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось удалить сотрудника',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleAddEmployee = async () => {
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(addForm),
+      });
+      
+      if (response.ok) {
+        await fetchEmployees();
+        setIsAddDialogOpen(false);
+        setAddForm({
+          name: '',
+          department: 'Продажи',
+          status: 'active',
+          links: 0,
+          reports: 0,
+          warnings: 0,
+          salary: 0,
+        });
+        toast({
+          title: 'Сотрудник добавлен',
+          description: `${addForm.name} успешно добавлен в систему`,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось добавить сотрудника',
+        variant: 'destructive',
+      });
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -130,7 +214,10 @@ const Index = () => {
             <h1 className="text-4xl font-bold text-foreground">Управление персоналом</h1>
             <p className="text-muted-foreground mt-2">Мониторинг и аналитика сотрудников</p>
           </div>
-          <Icon name="Users" size={48} className="text-primary" />
+          <Button onClick={() => setIsAddDialogOpen(true)} size="lg" className="gap-2">
+            <Icon name="UserPlus" className="h-5 w-5" />
+            Добавить сотрудника
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -547,6 +634,127 @@ const Index = () => {
             </Button>
             <Button onClick={handleSaveEdit}>
               Сохранить изменения
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Добавить сотрудника</DialogTitle>
+            <DialogDescription>
+              Заполните данные нового сотрудника
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="add-name" className="text-right">
+                Имя
+              </Label>
+              <Input
+                id="add-name"
+                value={addForm.name}
+                onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
+                className="col-span-3"
+                placeholder="Введите полное имя"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="add-department" className="text-right">
+                Отдел
+              </Label>
+              <Select
+                value={addForm.department}
+                onValueChange={(value) => setAddForm({ ...addForm, department: value })}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Продажи">Продажи</SelectItem>
+                  <SelectItem value="Маркетинг">Маркетинг</SelectItem>
+                  <SelectItem value="IT">IT</SelectItem>
+                  <SelectItem value="HR">HR</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="add-status" className="text-right">
+                Статус
+              </Label>
+              <Select
+                value={addForm.status}
+                onValueChange={(value: 'active' | 'vacation' | 'inactive') => 
+                  setAddForm({ ...addForm, status: value })
+                }
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Активен</SelectItem>
+                  <SelectItem value="vacation">Отпуск</SelectItem>
+                  <SelectItem value="inactive">Неактивен</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="add-links" className="text-right">
+                Ссылки
+              </Label>
+              <Input
+                id="add-links"
+                type="number"
+                value={addForm.links}
+                onChange={(e) => setAddForm({ ...addForm, links: Number(e.target.value) })}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="add-reports" className="text-right">
+                Отчеты
+              </Label>
+              <Input
+                id="add-reports"
+                type="number"
+                value={addForm.reports}
+                onChange={(e) => setAddForm({ ...addForm, reports: Number(e.target.value) })}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="add-warnings" className="text-right">
+                Предупреждения
+              </Label>
+              <Input
+                id="add-warnings"
+                type="number"
+                value={addForm.warnings}
+                onChange={(e) => setAddForm({ ...addForm, warnings: Number(e.target.value) })}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="add-salary" className="text-right">
+                Зарплата
+              </Label>
+              <Input
+                id="add-salary"
+                type="number"
+                value={addForm.salary}
+                onChange={(e) => setAddForm({ ...addForm, salary: Number(e.target.value) })}
+                className="col-span-3"
+                placeholder="Введите сумму"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+              Отмена
+            </Button>
+            <Button onClick={handleAddEmployee}>
+              Добавить сотрудника
             </Button>
           </DialogFooter>
         </DialogContent>
