@@ -2,6 +2,16 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -10,6 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useToast } from '@/hooks/use-toast';
 import Icon from '@/components/ui/icon';
 
 type Employee = {
@@ -23,7 +34,7 @@ type Employee = {
   salary: number;
 };
 
-const mockEmployees: Employee[] = [
+const initialEmployees: Employee[] = [
   { id: 1, name: 'Анна Смирнова', department: 'Продажи', status: 'active', links: 145, reports: 28, warnings: 0, salary: 85000 },
   { id: 2, name: 'Дмитрий Иванов', department: 'Маркетинг', status: 'active', links: 203, reports: 32, warnings: 1, salary: 95000 },
   { id: 3, name: 'Елена Петрова', department: 'Продажи', status: 'vacation', links: 167, reports: 25, warnings: 0, salary: 78000 },
@@ -35,12 +46,26 @@ const mockEmployees: Employee[] = [
 ];
 
 const Index = () => {
+  const { toast } = useToast();
+  const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [salaryFilter, setSalaryFilter] = useState('all');
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [editForm, setEditForm] = useState<Employee>({
+    id: 0,
+    name: '',
+    department: '',
+    status: 'active',
+    links: 0,
+    reports: 0,
+    warnings: 0,
+    salary: 0,
+  });
 
-  const filteredEmployees = mockEmployees.filter((employee) => {
+  const filteredEmployees = employees.filter((employee) => {
     const matchesSearch = employee.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesDepartment = departmentFilter === 'all' || employee.department === departmentFilter;
     const matchesStatus = statusFilter === 'all' || employee.status === statusFilter;
@@ -59,6 +84,33 @@ const Index = () => {
   const avgSalary = filteredEmployees.length > 0
     ? Math.round(filteredEmployees.reduce((sum, emp) => sum + emp.salary, 0) / filteredEmployees.length)
     : 0;
+
+  const handleEditClick = (employee: Employee) => {
+    setEditingEmployee(employee);
+    setEditForm(employee);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = () => {
+    setEmployees(employees.map(emp => 
+      emp.id === editForm.id ? editForm : emp
+    ));
+    setIsEditDialogOpen(false);
+    toast({
+      title: 'Сотрудник обновлен',
+      description: `Данные ${editForm.name} успешно сохранены`,
+    });
+  };
+
+  const handleDeleteEmployee = (id: number) => {
+    const employee = employees.find(emp => emp.id === id);
+    setEmployees(employees.filter(emp => emp.id !== id));
+    toast({
+      title: 'Сотрудник удален',
+      description: `${employee?.name} удален из системы`,
+      variant: 'destructive',
+    });
+  };
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline', text: string }> = {
@@ -220,12 +272,13 @@ const Index = () => {
                       <TableHead className="text-center">Отчеты</TableHead>
                       <TableHead className="text-center">Предупреждения</TableHead>
                       <TableHead className="text-right">Зарплата</TableHead>
+                      <TableHead className="text-right">Действия</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredEmployees.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                           Сотрудники не найдены
                         </TableCell>
                       </TableRow>
@@ -259,6 +312,26 @@ const Index = () => {
                           <TableCell className="text-right font-mono font-semibold">
                             ₽{employee.salary.toLocaleString()}
                           </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditClick(employee)}
+                                className="h-8 w-8 p-0"
+                              >
+                                <Icon name="Pencil" className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteEmployee(employee.id)}
+                                className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                              >
+                                <Icon name="Trash2" className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
                         </TableRow>
                       ))
                     )}
@@ -278,10 +351,10 @@ const Index = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 {['Продажи', 'Маркетинг', 'IT', 'HR'].map((dept) => {
-                  const deptEmployees = mockEmployees.filter(e => e.department === dept);
+                  const deptEmployees = employees.filter(e => e.department === dept);
                   const totalLinks = deptEmployees.reduce((sum, e) => sum + e.links, 0);
                   const maxLinks = Math.max(...['Продажи', 'Маркетинг', 'IT', 'HR'].map(d => 
-                    mockEmployees.filter(e => e.department === d).reduce((sum, e) => sum + e.links, 0)
+                    employees.filter(e => e.department === d).reduce((sum, e) => sum + e.links, 0)
                   ));
                   const percentage = (totalLinks / maxLinks) * 100;
                   
@@ -312,9 +385,9 @@ const Index = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 {[
-                  { label: 'Низкий уровень', range: '< ₽80k', count: mockEmployees.filter(e => e.salary < 80000).length, color: 'bg-yellow-500' },
-                  { label: 'Средний уровень', range: '₽80k - ₽100k', count: mockEmployees.filter(e => e.salary >= 80000 && e.salary < 100000).length, color: 'bg-blue-500' },
-                  { label: 'Высокий уровень', range: '> ₽100k', count: mockEmployees.filter(e => e.salary >= 100000).length, color: 'bg-green-500' },
+                  { label: 'Низкий уровень', range: '< ₽80k', count: employees.filter(e => e.salary < 80000).length, color: 'bg-yellow-500' },
+                  { label: 'Средний уровень', range: '₽80k - ₽100k', count: employees.filter(e => e.salary >= 80000 && e.salary < 100000).length, color: 'bg-blue-500' },
+                  { label: 'Высокий уровень', range: '> ₽100k', count: employees.filter(e => e.salary >= 100000).length, color: 'bg-green-500' },
                 ].map((item) => (
                   <div key={item.label} className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
@@ -322,7 +395,7 @@ const Index = () => {
                       <span className="text-muted-foreground">{item.count} сотрудников</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className={`h-2 ${item.color} rounded-full`} style={{ width: `${(item.count / mockEmployees.length) * 100}%` }} />
+                      <div className={`h-2 ${item.color} rounded-full`} style={{ width: `${employees.length > 0 ? (item.count / employees.length) * 100 : 0}%` }} />
                       <span className="text-xs text-muted-foreground">{item.range}</span>
                     </div>
                   </div>
@@ -339,7 +412,7 @@ const Index = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {mockEmployees.filter(e => e.warnings > 0).map((employee) => (
+                  {employees.filter(e => e.warnings > 0).map((employee) => (
                     <div key={employee.id} className="flex items-center justify-between p-3 bg-destructive/10 rounded-lg">
                       <div className="flex-1">
                         <p className="font-medium text-sm">{employee.name}</p>
@@ -348,7 +421,7 @@ const Index = () => {
                       <Badge variant="destructive">{employee.warnings}</Badge>
                     </div>
                   ))}
-                  {mockEmployees.filter(e => e.warnings > 0).length === 0 && (
+                  {employees.filter(e => e.warnings > 0).length === 0 && (
                     <p className="text-sm text-muted-foreground text-center py-4">
                       Нет активных предупреждений
                     </p>
@@ -359,6 +432,125 @@ const Index = () => {
           </div>
         </div>
       </div>
+
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Редактировать сотрудника</DialogTitle>
+            <DialogDescription>
+              Внесите изменения в данные сотрудника
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="name" className="text-right">
+                Имя
+              </Label>
+              <Input
+                id="name"
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="department" className="text-right">
+                Отдел
+              </Label>
+              <Select
+                value={editForm.department}
+                onValueChange={(value) => setEditForm({ ...editForm, department: value })}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Продажи">Продажи</SelectItem>
+                  <SelectItem value="Маркетинг">Маркетинг</SelectItem>
+                  <SelectItem value="IT">IT</SelectItem>
+                  <SelectItem value="HR">HR</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="status" className="text-right">
+                Статус
+              </Label>
+              <Select
+                value={editForm.status}
+                onValueChange={(value: 'active' | 'vacation' | 'inactive') => 
+                  setEditForm({ ...editForm, status: value })
+                }
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Активен</SelectItem>
+                  <SelectItem value="vacation">Отпуск</SelectItem>
+                  <SelectItem value="inactive">Неактивен</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="links" className="text-right">
+                Ссылки
+              </Label>
+              <Input
+                id="links"
+                type="number"
+                value={editForm.links}
+                onChange={(e) => setEditForm({ ...editForm, links: Number(e.target.value) })}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="reports" className="text-right">
+                Отчеты
+              </Label>
+              <Input
+                id="reports"
+                type="number"
+                value={editForm.reports}
+                onChange={(e) => setEditForm({ ...editForm, reports: Number(e.target.value) })}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="warnings" className="text-right">
+                Предупреждения
+              </Label>
+              <Input
+                id="warnings"
+                type="number"
+                value={editForm.warnings}
+                onChange={(e) => setEditForm({ ...editForm, warnings: Number(e.target.value) })}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="salary" className="text-right">
+                Зарплата
+              </Label>
+              <Input
+                id="salary"
+                type="number"
+                value={editForm.salary}
+                onChange={(e) => setEditForm({ ...editForm, salary: Number(e.target.value) })}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              Отмена
+            </Button>
+            <Button onClick={handleSaveEdit}>
+              Сохранить изменения
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
